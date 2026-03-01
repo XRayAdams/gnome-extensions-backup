@@ -152,15 +152,17 @@ if [ -z "$EXTENSION_INFO" ]; then
     return 1
 fi
 
-# Check for error response (extension doesn't support this version)
-if echo "$EXTENSION_INFO" | grep -q '"error"'; then
-    # Try to get info about available versions
+# Extract download URL (handle both "key":"value" and "key": "value" formats)
+DOWNLOAD_URL=$(echo "$EXTENSION_INFO" | grep -o '"download_url"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/.*"\([^"]*\)"/\1/')
+
+if [ -z "$DOWNLOAD_URL" ]; then
+    # No download URL means version not supported, try to get available versions
     ALL_INFO_URL="https://extensions.gnome.org/extension-info/?uuid=${EXTENSION_ID}"
     ALL_INFO=$(curl -s "$ALL_INFO_URL")
     
-    if [ -n "$ALL_INFO" ] && ! echo "$ALL_INFO" | grep -q '"error"'; then
-        # Extract shell versions map to show supported versions
-        SUPPORTED_VERSIONS=$(echo "$ALL_INFO" | grep -o '"[0-9][0-9]*":' | tr -d '":' | sort -n | tr '\n' ', ' | sed 's/,$//')
+    if [ -n "$ALL_INFO" ]; then
+        # Extract shell versions from shell_version_map
+        SUPPORTED_VERSIONS=$(echo "$ALL_INFO" | grep -o '"[0-9][0-9]*"[[:space:]]*:[[:space:]]*{' | grep -o '"[0-9][0-9]*"' | tr -d '"' | sort -n | tr '\n' ', ' | sed 's/,$//')
         if [ -n "$SUPPORTED_VERSIONS" ]; then
             echo "  ✗ Not compatible with GNOME Shell $GNOME_VERSION"
             echo "    Supported versions: $SUPPORTED_VERSIONS"
@@ -170,13 +172,6 @@ if echo "$EXTENSION_INFO" | grep -q '"error"'; then
     else
         echo "  ✗ Extension not found or not compatible with GNOME Shell $GNOME_VERSION"
     fi
-    return 1
-fi
-
-DOWNLOAD_URL=$(echo "$EXTENSION_INFO" | grep -o '"download_url":"[^"]*' | cut -d'"' -f4)
-
-if [ -z "$DOWNLOAD_URL" ]; then
-    echo "  ✗ No download URL available for GNOME Shell $GNOME_VERSION"
     return 1
 fi
 
